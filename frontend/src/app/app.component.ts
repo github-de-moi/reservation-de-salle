@@ -1,7 +1,7 @@
 import { Component, AfterViewInit } from '@angular/core';
 import { ReservationService, Reservation } from './reservation.service';
 
-// importés via angular.json
+// jquery et fullcalendar importés via angular.json
 // /!\ si importés deux fois, erreur chelou 
 // jquery__WEBPACK_IMPORTED_MODULE_2__(...).modal is not a function
 //import * as $ from "jquery";
@@ -14,7 +14,7 @@ const $ = window['jQuery'];
 const aujourd_hui = (new Date()).toISOString().substr(0, 10);
 
 /**
- * Sert à gérer le formalaire d'édition.
+ * Sert à gérer le formulaire d'édition.
  * @export
  * @class Formulaire
  */
@@ -139,7 +139,22 @@ export class AppComponent implements AfterViewInit {
       eventLimit: true,
 
       // traduction
-      locale: "fr"
+      locale: "fr",
+
+      // les évènements sont modifiables à la souris
+      editable: true,
+
+      // TODO validRange -> interdire hier ou avant
+
+      // repositionnement
+      eventDrop: (event, delta, revertFunc) => {
+        this.onMove(event, revertFunc);
+      },
+      
+      // redimmensionnement
+      eventResize: (event, delta, revertFunc) => {
+        this.onMove(event, revertFunc);
+      }
 
 		});
 
@@ -172,7 +187,7 @@ export class AppComponent implements AfterViewInit {
     this.enCours.date = startDate.substr(0, 10);
 
     // si la date est antérieure à la date du jour, on ne fait rien ^^
-    if(this.enCours.date <= aujourd_hui) {
+    if(this.enCours.date < aujourd_hui) {
       console.log('Pas possible de réserver pour une date passée');
       return;
     }
@@ -216,18 +231,42 @@ export class AppComponent implements AfterViewInit {
 
   }
 
+  onMove(event: any, revertFunc): void {
+    // la recherche ne devrait **jamais** renvoyer null ici inch'alla
+    const existing = this.findResa(event.id);
+
+    // récupération de la (nouvelle ?) date 
+    let nouvelleDate = event.start.format().substr(0, 10);
+
+    // conversion en minutes des nouvelles heures de début et fin
+    let debutEnMinutes: number = this.hourToMinutes(event.start.format().substr(11, 5));
+    let finEnMinutes: number = this.hourToMinutes(event.end.format().substr(11, 5));
+
+    // modification
+    let reservation = new Reservation(existing.id, nouvelleDate, debutEnMinutes, finEnMinutes, existing.par_qui);
+    this.resa.update(reservation).subscribe((uid) => {
+      this.deleteResa(existing);
+      this.addResa(reservation);
+      this.enCours = null;
+
+      $('#calendar').fullCalendar('unselect');
+    }, (error) => {
+      console.error('erreur de sauvegarde', error);
+      window.alert('erreur de sauvegarde');
+      revertFunc();
+    });
+  }
+
   onSubmit(): void {
     
     // TODO vérifier la validité des données saisies (debut et fin) !!
     
     // conversion en minutes des heures de début et fin
-    const heureDebut = this.enCours.debut;
-    let debutEnMinutes: number = parseInt(heureDebut.substr(0, 2)) * 60 + parseInt(heureDebut.substr(3, 2));
+    let debutEnMinutes: number = this.hourToMinutes(this.enCours.debut);
 
     // extraction de l'heure de fin
     // et conversion en minutes
-    const heureFin = this.enCours.fin;
-    let finEnMinutes: number = parseInt(heureFin.substr(0, 2)) * 60 + parseInt(heureFin.substr(3, 2));
+    let finEnMinutes: number = this.hourToMinutes(this.enCours.fin);
 
     if(this.enCours.id) {
       
@@ -311,6 +350,11 @@ export class AppComponent implements AfterViewInit {
       return null;
     }
     return ('' + Math.floor(m/60)).padStart(2, '0') + ":" + ('' + Math.floor(m%60)).padStart(2, '0');
+  }
+
+  hourToMinutes(s: string): number {
+    // TODO vérifier que l'input est sous la forme hh:mm ou pas loin ;-)
+    return parseInt(s.substr(0, 2)) * 60 + parseInt(s.substr(3, 2));
   }
 
   //
