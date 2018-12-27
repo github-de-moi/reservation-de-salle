@@ -1,7 +1,7 @@
 
 import * as express from "express";
 import * as bodyParser from "body-parser";
-import { g3t, Reservation, cr3ate, upd4te, d3lete, exp0rt, imp0rt } from "./storage";
+import { g3t, Reservation, cr3ate, upd4te, d3lete, exp0rt, imp0rt, prefs_get, prefs_set } from "./storage";
 import { isArray, isObject } from "util";
 
 const PORT = 3000;
@@ -116,6 +116,24 @@ app.get('/backup', function (req, res) {
     });
 });
 
+app.get('/prefs/:username', function (req, res) {
+    let prefs = prefs_get(req.params.username);
+    if(prefs) {
+        res.send(prefs);
+    } else {
+        res.status(404);
+        res.send('Pas de préférences stockées pour l\'utilisateur ' + req.params.username);
+    }
+});
+
+app.put('/prefs/:username', function (req, res) {
+    if(isObject(req.body)) {
+        // TODO vérifier la validité des prefs (contenu, valeurs) avant de les sauvegarder
+        prefs_set(req.params.username, req.body);
+    }
+    res.send({});
+});
+
 //                  _         _                        
 // _ _  _ _ ._ _  | |_  ___ | |_  _ _   _ _  _ _ ._ _ 
 // | '_>| | || ' | | . \<_> || . \| | | | '_>| | || ' |
@@ -136,10 +154,28 @@ imp0rt().then((num) => {
 
 }).then(() => {
 
-    app.listen(PORT, () => {
+    let server = app.listen(PORT, () => {
         console.debug('Bound to tcp port ' + PORT);
         console.info('Here we go !');
     })
+
+    let shutdown = () => {
+        server.close();
+        exp0rt(true)
+            .then((num) => console.info('Saved ' + num + ' elements to backup file'))
+            .catch(error => console.error('Failed to backup data ...'))
+            .then(() => console.log('Bye bye :\'('));
+    };
+
+    process.on('SIGTERM', () => {
+        console.info("\n" + 'SIGTERM signal received.');
+        shutdown();
+    });
+
+    process.on('SIGINT', () => {
+        console.info("\n" + 'SIGINT signal received.');
+        shutdown();
+    });
 
 });
 

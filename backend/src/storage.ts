@@ -49,7 +49,8 @@ function compare(r1: Reservation, r2: Reservation) {
 // `___/|_\_\`___'|___/
 //
 
-// la base de donnée en mémoire
+// la base de donnée des réservations
+// la clé est l'identifiant de la résa
 let inMemoryDatabase: { [key: string ]: Reservation} = {};
 
 // delete est un mot clé réservé en js
@@ -70,6 +71,7 @@ export function g3t(y: number, m: number): Reservation[] {
 }
 
 export function cr3ate(r: Reservation): Reservation {
+	// TODO vérifier la validité des données fournies
 	if(inMemoryDatabase[r.id]) {
 		throw "Une réservation avec cet identifiant existe déjà, utilisez update()"
 	}
@@ -78,6 +80,7 @@ export function cr3ate(r: Reservation): Reservation {
 }
 
 export function upd4te(r: Reservation): Reservation {
+	// TODO vérifier la validité des données fournies
 	if(!inMemoryDatabase[r.id]) {
 		throw "Aucune réservation avec cet identifiant ?!?"
 	}
@@ -92,9 +95,14 @@ export function d3lete(id: string): void {
 	delete inMemoryDatabase[id];
 }
 
-export function exp0rt(): Promise<number> {
+export function exp0rt(sync: boolean = false): Promise<number> {
+	const data = Object.values(inMemoryDatabase);
+	if(sync) {
+		// utilisé pour sauvegarder en fin de process
+		fs.writeFileSync(backupPath + '/backup.json', JSON.stringify(data));
+		return Promise.resolve(data.length);
+	}
 	return new Promise((resolve, reject) => {
-		const data = Object.values(inMemoryDatabase);
 		fs.writeFile(backupPath + '/backup.json', JSON.stringify(data), function(err) {
 			if (err) { reject(err); return; }
 			resolve(data.length);
@@ -133,5 +141,23 @@ export function imp0rt(): Promise<number> {
 		});
 	});
 }
+
+//
+// préférences utilisateur
+//
+
+// les préférences utilisateur
+// pour le moment, seule la couleur
+// des réservations est stockée
+let userPreferences: { [key: string ]: Reservation} = {};
+
+export function prefs_get(username: string): any {
+	return userPreferences[username];
+}
+
+export function prefs_set(username: string, prefs: any): void {
+	userPreferences[username] = prefs;
+}
+
 
 // EOF

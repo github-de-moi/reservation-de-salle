@@ -2,9 +2,9 @@
 
 <!-- modal de création/modification -->
 <div *ngIf="enCours" class="modal fade" data-backdrop="static" id="dialog-create-or-edit" tabindex="-1" role="dialog" attr.aria-labelledby="dialog-create-or-edit-title" aria-hidden="true">
-  <div class="modal-dialog" role="document">
+  <div class="modal-dialog  modal-lg" role="document">
     <div class="modal-content">
-	<form>
+	<form #form="ngForm" (ngSubmit)="onSubmit()">
       <div class="modal-header">
         <h5 class="modal-title" id="dialog-confirm-delete-title"> {{ enCours.readOnly ? 'Consulter une réservation' : 'Editer une réservation' }} </h5>
         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
@@ -16,20 +16,24 @@
 		<div class="row">
 			<div class="col form-group">
 				<label for="start">Heure de début</label>
-				<input [readonly]="enCours.readOnly" type="text" name="start" class="form-control" id="start" placeholder="..." [(ngModel)]="enCours.debut">
-				<small id="startHelp" class="form-text text-muted">Format : 12h00 ou 11:30 ou 9.15 ou juste 8</small>
+                <input [readonly]="enCours.readOnly" type="text" name="start" class="form-control"
+                    id="start" placeholder="..." [(ngModel)]="enCours.debut" required pattern="[0-9]{1,2}[.:h][0-9]{2}">
+				<small id="startHelp" class="form-text text-muted">Format 24h : 15h00 ou 11:30 ou 9.15</small>
 			</div>
 			<div class="col form-group">
 				<label for="end">Heure de fin</label>
-				<input [readonly]="enCours.readOnly" type="text" name="end" class="form-control" id="end" placeholder="..."[(ngModel)]="enCours.fin">
+                <input [readonly]="enCours.readOnly" type="text" name="end" class="form-control"
+                    id="end" placeholder="..."[(ngModel)]="enCours.fin" required pattern="[0-9]{1,2}[.:h][0-9]{2}">
 				<small id="endHelp" class="form-text text-muted">Même format que pour l'heure de début :-)</small>
 			</div>
 		</div>
-	
+        <div *ngIf="enCours.error" class="row">
+            <p class="col text-center" style="color: red;">{{ enCours.error }}</p>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" (click)="onCancel()" class="btn btn-secondary" data-dismiss="modal">Annuler</button>
-        <button type="button" [disabled]="enCours.readOnly"  (click)="onSubmit()" class="btn btn-primary" data-dismiss="modal">Enregistrer</button>
+        <button type="submit" [disabled]="enCours.readOnly" class="btn btn-primary">Enregistrer</button>
       </div>
 	</form>
     </div>

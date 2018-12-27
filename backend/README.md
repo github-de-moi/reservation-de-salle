@@ -31,3 +31,8 @@ Here we go !
 ## Packaging
 
 To be done ^^
+
+## TODO
+
+Reste à faire :
+- réorganiser le code, surtout la déclaration des endpoints (utiliser le router ?)

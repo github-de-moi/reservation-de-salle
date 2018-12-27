@@ -7,9 +7,10 @@ L'interface utilisateur est développée en Angular 7 avec bootstrap. Les réser
 
 ## TODO
 
-- griser les evènements passés et empêcher leur modif/suppression
-- implémenter **complètement** la validation des formulaires
 - laisser l'utilisateur choisir la couleur de ses réservations (préf à conserver dans le backend)
-- pouvoir déplacer une réservation (en édition et en drag'n'drop)
-- purge des données passées
+- utiliser le json feed comme source (https://fullcalendar.io/docs/events-json-feed) ?
+- lors d'une sauvegarde, purger les données trop vieilles
 - gérer la répétition
+
+- ~~griser les evènements passés et empêcher leur modif/suppression~~
+- ~~pouvoir déplacer une réservation (en édition et en drag'n'drop)~~
