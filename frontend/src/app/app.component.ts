@@ -24,11 +24,12 @@ const aujourd_hui = (new Date()).toISOString().substr(0, 10);
 export class Formulaire {
 
   public id: string;
-  // pour le moment, la date ne peut pas changer
-  // seulement l'heure (car pas d'ihm pour ^^)
+
   public date: string;
   public debut: string;
   public fin: string;
+
+  public commentaire: string = null;
 
   // le formulaire est-il modifiable ?
   public readOnly: boolean = false;
@@ -107,9 +108,7 @@ export class AppComponent implements AfterViewInit {
 
         // seul l'owner peut supprimer une résa
         // donc pas de bras, pas de croix
-        // l'identifiant de l'utilisateur est
-        // justement dans titre de l'évènement
-        if(this.currentUser != event.title) {
+        if(this.currentUser != resa.par_qui) {
           return;
         }
 
@@ -123,7 +122,6 @@ export class AppComponent implements AfterViewInit {
         // </a>
         element.find(".fc-content").prepend( "<span id=\"" + event.id + "\" class=\"delete\" aria-hidden=\"true\">&times;</span>" );
         element.find("span#" + event.id+".delete").click((mouseEvent) => {
-          ///console.log('delete', event);
           mouseEvent.stopPropagation();
           this.onDelete(event.id);
         });
@@ -149,13 +147,11 @@ export class AppComponent implements AfterViewInit {
       // création par click
       selectable: true,      
       select: (start, end) => {
-        ///console.log('select', event);
         this.onCreate(start, end);
       },
 
       // sélection d'évènement
       eventClick: (event, jsEvent, view) => { 
-        ///console.log('eventClick', event);
         this.onEdit('' + event.id);
       },
 
@@ -214,8 +210,13 @@ export class AppComponent implements AfterViewInit {
     // exemple : 2018-12-03 / 2018-12-04
     // et en visu jour, on reçoit date+heure
     // exemple : 2018-12-21T06:00:00 / 2018-12-21T06:30:00
+    // dans tous les cas, les dates sont ordonnées :-)
 
     const startDate = start.format();
+    const endDate = end.format();
+
+    console.log(startDate, endDate)
+
     this.enCours = new Formulaire();
     this.enCours.date = startDate.substr(0, 10);
 
@@ -252,6 +253,7 @@ export class AppComponent implements AfterViewInit {
 
     // marshalling
     this.enCours = new Formulaire();
+    this.enCours.commentaire = resa.commentaire;
     this.enCours.debut = this.minutesToHour(resa.debut);
     this.enCours.fin = this.minutesToHour(resa.fin);
     this.enCours.date = resa.date;
@@ -279,8 +281,10 @@ export class AppComponent implements AfterViewInit {
     let debutEnMinutes: number = this.hourToMinutes(event.start.format().substr(11, 5));
     let finEnMinutes: number = this.hourToMinutes(event.end.format().substr(11, 5));
 
-    // modification
+    // modification (TODO copy constructor)
     let reservation = new Reservation(existing.id, nouvelleDate, debutEnMinutes, finEnMinutes, existing.par_qui);
+    reservation.commentaire = existing.commentaire;
+
     this.resa.update(reservation).subscribe((uid) => {
       this.deleteResa(existing);
       this.addResa(reservation);
@@ -313,12 +317,17 @@ export class AppComponent implements AfterViewInit {
     // et conversion en minutes
     let finEnMinutes: number = this.hourToMinutes(heureFin);
 
+console.log(this.enCours);
+
     if(this.enCours.id) {
       
       // la recherche ne devrait **jamais** renvoyer null ici inch'alla
       let existing = this.findResa(this.enCours.id);
       let reservation = new Reservation(existing.id, existing.date, debutEnMinutes, finEnMinutes, existing.par_qui);
-      
+      if(this.enCours.commentaire) {
+        reservation.commentaire = this.enCours.commentaire;
+      }
+
       this.resa.update(reservation).subscribe((uid) => {
         $("#dialog-create-or-edit").modal('hide');
         this.deleteResa(existing);
@@ -333,6 +342,10 @@ export class AppComponent implements AfterViewInit {
       
     } else {
       let reservation = new Reservation(null, this.enCours.date, debutEnMinutes, finEnMinutes, this.currentUser);
+      if(this.enCours.commentaire) {
+        reservation.commentaire = this.enCours.commentaire;
+      }
+
       this.resa.create(reservation).subscribe((uid) => {
         $("#dialog-create-or-edit").modal('hide');
         // l'id du bean est déjà mis-à-jour ^^         
@@ -432,20 +445,36 @@ export class AppComponent implements AfterViewInit {
   //
 
   private resaToEvent(res: Reservation): any {
+    // la réservation est-elle périmée ?
+    let outdated = (res.date < aujourd_hui);
+
     // https://fullcalendar.io/docs/event-object
     let event = {
       id: res.id,
       start: res.date + 'T' + this.minutesToHour(res.debut),
       end: res.date + 'T' + this.minutesToHour(res.fin),
-      title: res.par_qui,
-      editable: (res.date >= aujourd_hui)
+      title: (res.commentaire ? res.commentaire + ' - ' : '') + res.par_qui,
+      // la réservation n'est éditable que si elle est de moi et non passée
+      editable: (res.par_qui === this.currentUser && !outdated)
     };
-    if(!event.editable) {
+    
+    if(outdated) {
+      // disabled
       event['color'] = '#CCCCCC';
+    } else if(res.par_qui === this.currentUser) {
+      // mes réservations à moi sont 
+      // dans une couleur différente
+      // pour sauter aux yeux :)
+      // TODO la rendre personnalisable (pref)
+      event['color'] = '#C8C8A9';
     }
     return event;
   }
 
+  /**
+   * Vérifie et normalise une heure au format "hh'.'mm" ou "hh':'mm" ou "nn'h'mm".
+   * @param str 
+   */
   private parseHourMinutes(str: string): string {
     
     let parts = (str || '').match(/([0-9]{1,2})[.:h]([0-9]{2})/);

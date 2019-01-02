@@ -13,18 +13,24 @@ export class Reservation {
 
 	readonly id: string;
 
-	year(): number {
-		return parseInt(this.date.substr(0, 4));
-	}
+	// le commentaire est optionnel
+	public commentaire: string = null;
 
-	month(): number {
-		return parseInt(this.date.substr(5, 2));
-	}
-
-	// date au format iso, debut et fin en minutes
+	// date au format iso, debut et fin en minutes (pas vérifiés)
 	constructor(readonly date: string, readonly debut: number, readonly fin: number, readonly par_qui: string) {
 		this.id = uuidv4();
 	}
+
+	// helpers
+
+	public year(): number {
+		return parseInt(this.date.substr(0, 4));
+	}
+
+	public month(): number {
+		return parseInt(this.date.substr(5, 2));
+	}
+
 }
 
 //  _         _                    
@@ -33,6 +39,11 @@ export class Reservation {
 // |_|_|\___.|_||  _/\___.|_|  /__/
 //              |_|                
 //
+
+// détermine si une chaîne est un uuid valide
+export function isUuid(s: string): boolean {
+	return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
 
 // compare deux réservations (ordre chronologique)
 function compare(r1: Reservation, r2: Reservation) {
@@ -149,7 +160,7 @@ export function imp0rt(): Promise<number> {
 // les préférences utilisateur
 // pour le moment, seule la couleur
 // des réservations est stockée
-let userPreferences: { [key: string ]: Reservation} = {};
+let userPreferences: { [ key: string ]: Reservation} = {};
 
 export function prefs_get(username: string): any {
 	return userPreferences[username];

@@ -26,6 +26,13 @@
                     id="end" placeholder="..."[(ngModel)]="enCours.fin" required pattern="[0-9]{1,2}[.:h][0-9]{2}">
 				<small id="endHelp" class="form-text text-muted">Même format que pour l'heure de début :-)</small>
 			</div>
+        </div>
+        <div class="row">
+			<div class="col form-group">
+				<label for="start">Commentaire (optionnel)</label>
+                <input [readonly]="enCours.readOnly" type="text" name="commentaire" class="form-control"
+                    id="commentaire" placeholder="" [(ngModel)]="enCours.commentaire" maxlength="64">
+			</div>
 		</div>
         <div *ngIf="enCours.error" class="row">
             <p class="col text-center" style="color: red;">{{ enCours.error }}</p>

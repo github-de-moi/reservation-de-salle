@@ -16,3 +16,7 @@ Utiliser la commande `ng serve` pour lancer le projet, et utiliser un butineur p
 ```
 $ ng build --prod
 ```
+
+## Credits
+
+Free [Favicon](https://www.freefavicon.com/freefavicons/business/iconinfo/calendar-152-182401.html) :-)

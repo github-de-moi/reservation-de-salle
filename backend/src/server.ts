@@ -1,8 +1,8 @@
 
 import * as express from "express";
 import * as bodyParser from "body-parser";
-import { g3t, Reservation, cr3ate, upd4te, d3lete, exp0rt, imp0rt, prefs_get, prefs_set } from "./storage";
-import { isArray, isObject } from "util";
+import { g3t, Reservation, cr3ate, upd4te, d3lete, exp0rt, imp0rt, prefs_get, prefs_set, isUuid } from "./storage";
+import { isObject } from "util";
 
 const PORT = 3000;
 
@@ -34,7 +34,14 @@ app.options('*', cors());
 
 // convertit un objet vanilla {} en bean
 const unmarshaller = (json): Reservation => {
-    return new Reservation(json.date, json.debut, json.fin, json.par_qui);
+    // TODO jeter une exception si données invalides
+    let result = new Reservation(json.date, json.debut, json.fin, json.par_qui);
+    if(json.id && isUuid(json.id)) {
+        (result as any).id = json.id;
+    }
+    // le commentaire est optionnel
+    result.commentaire = json.commentaire;
+    return result;
 };
 
 //                  _           
@@ -69,13 +76,7 @@ app.post('/', function (req, res) {
     let ids: string[] = [];
 
     // req.body contient le json uploadé
-    // on gère les envois unitaires et de masse ^^ 
-
-    if(isArray(req.body)) {
-        req.body.forEach(element => {
-            ids.push( cr3ate(unmarshaller(element)).id );
-        });
-    } else if(isObject(req.body)) {
+    if(isObject(req.body)) {
         ids.push( cr3ate(unmarshaller(req.body)).id );
     } else {
         res.status(400);
@@ -90,9 +91,8 @@ app.put('/:id', function (req, res) {
     // envois unitaires uniquement ici !
     if(isObject(req.body)) {
         // convertit un objet vanilla {} en bean
-        let reservation = unmarshaller(req.body);
-        (reservation as any).id = req.params.id;
-        upd4te(reservation);
+        // et le persiste "en base"
+        upd4te( unmarshaller(req.body) );
     } else {
         res.status(400);
         res.send('Objet attendu');

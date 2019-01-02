@@ -28,6 +28,8 @@ Bound to tcp port 3000
 Here we go !
 ```
 
+(en fait, en lançant cette commande, 3 process son créés : npm, sh -c ts-node ./src/server.ts et node /usr/bin/ts-node ./src/server.ts ; seule la denière commande est vraiment pertinente ;-))
+
 ## Packaging
 
 To be done ^^

@@ -21,7 +21,9 @@ function cast<T>(bean: any, clazz: { new(...args: any[]): T }): T {
 //
 
 // une réservation reçue du serveur
+// TODO partager ce bean avec le serveur
 export class Reservation {
+    public commentaire: string = null;
     // date au format iso, debut et fin en minutes
 	constructor(readonly id: string, readonly date: string, readonly debut: number, readonly fin: number, readonly par_qui: string) {
 	}
