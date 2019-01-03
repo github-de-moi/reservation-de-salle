@@ -45,6 +45,11 @@ export function isUuid(s: string): boolean {
 	return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 }
 
+// détermine si une chaîne est une date valide (en format iso)
+export function isIsoDate(s: string): boolean {
+	return /^20[0-9]{2}-(0[1-9]|1[0-2])-[0-9]{2}$/.test(s);
+}
+
 // compare deux réservations (ordre chronologique)
 function compare(r1: Reservation, r2: Reservation) {
 	let delta = (r1.date.localeCompare(r2.date));
@@ -70,15 +75,16 @@ let inMemoryDatabase: { [key: string ]: Reservation} = {};
 // et pour pas que les autres soient jaloux,
 // on les leet aussi ^^ 
 
-export function g3t(y: number, m: number): Reservation[] {
+export function g3t(start: string, end: string): Reservation[] {
 	// let values = Object.values(db); ?!?
 	let values: Reservation[] = [];
 	Object.keys(inMemoryDatabase).forEach(function(key, index) {
-		values.push(inMemoryDatabase[key]);
+		let reservation = inMemoryDatabase[key];
+		if((!start || start.substr(0, 10) <= reservation.date) && (!end || end.substr(0, 10) > reservation.date)) {
+			values.push(reservation);
+		}
 	});
-	return values.filter(res => {
-		return (res.year() == y && res.month() == m);
-	});
+	return values;
 }
 
 export function cr3ate(r: Reservation): Reservation {
@@ -104,6 +110,32 @@ export function d3lete(id: string): void {
 		throw "Aucune réservation avec cet identifiant ?!?"
 	}
 	delete inMemoryDatabase[id];
+}
+
+export function purg3(): number {
+	let sevenDaysAgo = new Date();
+	// on ne garde que 7 jours d'historique
+	sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+	const threshold = sevenDaysAgo.getFullYear() + '-' +
+		('' + (sevenDaysAgo.getMonth() + 1)).padStart(2, '0') + '-' + 
+		('' + sevenDaysAgo.getDate()).padStart(2, '0');
+
+	console.log('Cleaning everything before ' + threshold);
+
+	let toBeRemoved: string[] = [];
+	// premier passage pour énumérer les clés à supprimer
+	Object.keys(inMemoryDatabase).forEach(function(key, index) {
+		let resa = inMemoryDatabase[key];
+		if(resa.date < threshold) {
+			toBeRemoved.push(key);
+		}
+	});
+	// deuxième passage pour supprimer
+	for(let key of toBeRemoved) {
+		delete inMemoryDatabase[key];
+	}
+	return toBeRemoved.length;
 }
 
 export function exp0rt(sync: boolean = false): Promise<number> {

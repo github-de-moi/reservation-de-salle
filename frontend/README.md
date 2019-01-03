@@ -19,4 +19,4 @@ $ ng build --prod
 
 ## Credits
 
-Free [Favicon](https://www.freefavicon.com/freefavicons/business/iconinfo/calendar-152-182401.html) :-)
+[Free Calandar Favicon](https://www.freefavicon.com/freefavicons/business/iconinfo/calendar-152-182401.html) :-)

@@ -9,8 +9,9 @@ L'interface utilisateur est développée en Angular 7 avec bootstrap. Les réser
 
 - laisser l'utilisateur choisir la couleur de ses réservations (préf à conserver dans le backend)
 - utiliser le json feed comme source (https://fullcalendar.io/docs/events-json-feed) ?
-- lors d'une sauvegarde, purger les données trop vieilles
 - gérer la répétition
+
+- ~~purge automatique des réservations de + de 7 jours~~ > **à tester !**
 
 - ~~griser les evènements passés et empêcher leur modif/suppression~~
 - ~~pouvoir déplacer une réservation (en édition et en drag'n'drop)~~

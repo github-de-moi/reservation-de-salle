@@ -1,7 +1,7 @@
 
 import * as express from "express";
 import * as bodyParser from "body-parser";
-import { g3t, Reservation, cr3ate, upd4te, d3lete, exp0rt, imp0rt, prefs_get, prefs_set, isUuid } from "./storage";
+import { g3t, Reservation, cr3ate, upd4te, d3lete, exp0rt, imp0rt, prefs_get, prefs_set, isUuid, purg3, isIsoDate } from "./storage";
 import { isObject } from "util";
 
 const PORT = 3000;
@@ -52,23 +52,22 @@ const unmarshaller = (json): Reservation => {
 
 app.get('/', function (req, res) {
     
-    if(req.query.y && !req.query.y.match(/^20[0-9]{2}$/)) {
+    // compatibilité avec le json feed ^^
+    // https://fullcalendar.io/docs/events-json-feed
+
+    if(req.query.start && !isIsoDate(req.query.start.substr(0, 10))) {
         res.status(400);
-        res.send("Argument 'y' incorrect");
+        res.send("Argument 'start' incorrect");
         return;
     }
 
-    if(req.query.m && !req.query.m.match(/^[1-9]|1[0-2]$/)) {
+    if(req.query.end && !isIsoDate(req.query.end.substr(0, 10))) {
         res.status(400);
-        res.send("Argument 'm' incorrect");
+        res.send("Argument 'end' incorrect");
         return;
     }
 
-    let today = new Date();
-    let year = req.query.y ? parseInt(req.query.y) : today.getFullYear();
-    // /!\ les mois sont zero-based sur l'objet Date
-    let month = req.query.m ? parseInt(req.query.m) : (today.getMonth() + 1); 
-    res.send( g3t(year, month) );
+    res.send( g3t(req.query.start, req.query.end) );
 });
 
 app.post('/', function (req, res) {
@@ -147,6 +146,29 @@ imp0rt().then((num) => {
     console.info(num > 0 ? 'Loaded ' + num + ' elements from backup file':
         'No backup or empty file found, starting from scratch ...');
 
+    let now = new Date();
+
+    // à partir de ce soir à ~22h,     
+    // purge toutes les nuits
+    let tonight = new Date();
+    tonight.setHours(22, 22, 22, 22);
+    
+    // effet de bord intéressant, si delta < 0,
+    // le callback est exécuté immédiatement ^^ 
+    let delta = (tonight.getTime() - now.getTime());
+    
+    console.log('Purge agent will run in ~ ' + Math.round(delta/1000/60/60) + ' hours (@ ' + tonight.toISOString() + ')');
+
+    setTimeout(() => {
+        console.log('Next purge will happen in ~ 1 day from now (' + (new Date()).toISOString() + ')');
+        setInterval(() => {
+            console.log('Cleaned up ' + purg3() + ' items')
+        }, 24*60*60*1000); // every day
+
+        // clean now
+        console.log('Cleaned up ' + purg3() + ' items')
+    }, delta);
+
 }).catch((error) => {
 
     console.error('Unable to read backup file ... starting with no data :-S');
@@ -163,8 +185,8 @@ imp0rt().then((num) => {
         server.close();
         exp0rt(true)
             .then((num) => console.info('Saved ' + num + ' elements to backup file'))
-            .catch(error => console.error('Failed to backup data ...'))
-            .then(() => console.log('Bye bye :\'('));
+            .catch((error) => console.error('Failed to backup data ...', error))
+            .then(() => { console.log('Bye bye :\'('); process.exit(0); });
     };
 
     process.on('SIGTERM', () => {

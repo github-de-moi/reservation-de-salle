@@ -3,6 +3,7 @@ import { ReservationService, Reservation } from './reservation.service';
 import { NgForm } from '@angular/forms';
 import { checkNoChangesNode } from '@angular/core/src/view/view';
 import { isArray } from 'util';
+import { environment } from 'src/environments/environment';
 
 // jquery et fullcalendar importés via angular.json
 // /!\ si importés deux fois, erreur chelou 
@@ -95,9 +96,23 @@ export class AppComponent implements AfterViewInit {
         right: 'month,agendaWeek' // agendaDay ?
       },
       
+      //eventSources: [
+      //  {
+      //    url: environment.backendUrl,
+      //    color: 'yellow'    // an option!
+      //  }
+      //],
+
+      eventDataTransform: (event: Reservation): any => {
+        console.log('eventDataTransform', event);
+        return event;
+      },
+
       // hook permettant d'ajuster le rendu d'un évènement
       // https://github.com/fullcalendar/fullcalendar/issues/3945
       eventRender: (event, element) => {
+
+        console.log('eventRender', event);
 
         // pas possible de modifier un évènement passé (géré dans le handler du click)
         // visuellement, il est grisé et n'a pas de croix de suppression
