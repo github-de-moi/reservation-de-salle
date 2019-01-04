@@ -1,13 +1,22 @@
 
 import * as express from "express";
 import * as bodyParser from "body-parser";
-import { g3t, Reservation, cr3ate, upd4te, d3lete, exp0rt, imp0rt, prefs_get, prefs_set, isUuid, purg3, isIsoDate } from "./storage";
+
+import { Reservation, Reservations, Preferences } from "./storage";
+import { isUuid, isIsoDate } from "./helpers";
 import { isObject } from "util";
 
-const PORT = 3000;
-
+// imports
+const uuidv4 = require('uuid/v4');
 const cors = require('cors');
 const app = express();
+
+// config
+const PORT = 3000;
+
+// le stockage des données
+const reservations: Reservations = new Reservations();
+const prefs: Preferences = new Preferences();
 
 //                 ___  _      
 //  ___  ___ ._ _ | | '<_> ___ 
@@ -35,10 +44,7 @@ app.options('*', cors());
 // convertit un objet vanilla {} en bean
 const unmarshaller = (json): Reservation => {
     // TODO jeter une exception si données invalides
-    let result = new Reservation(json.date, json.debut, json.fin, json.par_qui);
-    if(json.id && isUuid(json.id)) {
-        (result as any).id = json.id;
-    }
+    let result = new Reservation(isUuid(json.id) ? json.id : uuidv4(), json.date, json.debut, json.fin, json.par_qui);
     // le commentaire est optionnel
     result.commentaire = json.commentaire;
     return result;
@@ -57,56 +63,53 @@ app.get('/', function (req, res) {
 
     if(req.query.start && !isIsoDate(req.query.start.substr(0, 10))) {
         res.status(400);
-        res.send("Argument 'start' incorrect");
+        res.send({error: "argument 'start' incorrect, date iso attendue"});
         return;
     }
 
     if(req.query.end && !isIsoDate(req.query.end.substr(0, 10))) {
         res.status(400);
-        res.send("Argument 'end' incorrect");
+        res.send({error: "argument 'end' incorrect, date iso attendue"});
         return;
     }
 
-    res.send( g3t(req.query.start, req.query.end) );
+    res.send( reservations.find(req.query.start, req.query.end) );
 });
 
 app.post('/', function (req, res) {
 
-    let ids: string[] = [];
-
     // req.body contient le json uploadé
-    if(isObject(req.body)) {
-        ids.push( cr3ate(unmarshaller(req.body)).id );
-    } else {
+    if(!isObject(req.body)) {
         res.status(400);
-        res.send('Objet ou tableau attendu');
+        res.send({error: "données invalides, instance de Reservation attendue"});
+        return;
     }
 
-    res.send(ids);
+    let result = reservations.create(unmarshaller(req.body));
+    res.send({id: result.id});
 });
 
 app.put('/:id', function (req, res) {
     // req.body contient le json uploadé
-    // envois unitaires uniquement ici !
     if(isObject(req.body)) {
         // convertit un objet vanilla {} en bean
         // et le persiste "en base"
-        upd4te( unmarshaller(req.body) );
+        reservations.update( unmarshaller(req.body) );
     } else {
         res.status(400);
-        res.send('Objet attendu');
+        res.send({error: "données invalides, instance de Reservation attendue"});
     }
 
     res.send({});
 });
 
 app.delete('/:id', function (req, res) {
-    d3lete(req.params.id);
+    reservations.remove(req.params.id);
     res.send({});
 });
 
 app.get('/backup', function (req, res) {
-    exp0rt().then((num) => {
+    reservations.export().then((num) => {
         console.info('Saved ' + num + ' elements to backup file');
         res.send({"saved": num});
     }).catch((error) => {
@@ -116,19 +119,19 @@ app.get('/backup', function (req, res) {
 });
 
 app.get('/prefs/:username', function (req, res) {
-    let prefs = prefs_get(req.params.username);
-    if(prefs) {
-        res.send(prefs);
+    let values = prefs.get(req.params.username);
+    if(values) {
+        res.send(values);
     } else {
         res.status(404);
-        res.send('Pas de préférences stockées pour l\'utilisateur ' + req.params.username);
+        res.send({error: "pas de préférences stockées pour l'utilisateur " + req.params.username});
     }
 });
 
 app.put('/prefs/:username', function (req, res) {
     if(isObject(req.body)) {
         // TODO vérifier la validité des prefs (contenu, valeurs) avant de les sauvegarder
-        prefs_set(req.params.username, req.body);
+        prefs.set(req.params.username, req.body);
     }
     res.send({});
 });
@@ -141,7 +144,7 @@ app.put('/prefs/:username', function (req, res) {
 
 // https://stackoverflow.com/a/35999141
 // TODO comment utiliser Promise.finally ?
-imp0rt().then((num) => {
+reservations.import().then((num) => {
     
     console.info(num > 0 ? 'Loaded ' + num + ' elements from backup file':
         'No backup or empty file found, starting from scratch ...');
@@ -162,11 +165,11 @@ imp0rt().then((num) => {
     setTimeout(() => {
         console.log('Next purge will happen in ~ 1 day from now (' + (new Date()).toISOString() + ')');
         setInterval(() => {
-            console.log('Cleaned up ' + purg3() + ' items')
+            console.log('Cleaned up ' + reservations.purge() + ' items')
         }, 24*60*60*1000); // every day
 
         // clean now
-        console.log('Cleaned up ' + purg3() + ' items')
+        console.log('Cleaned up ' + reservations.purge() + ' items')
     }, delta);
 
 }).catch((error) => {
@@ -183,7 +186,7 @@ imp0rt().then((num) => {
 
     let shutdown = () => {
         server.close();
-        exp0rt(true)
+        reservations.export(true)
             .then((num) => console.info('Saved ' + num + ' elements to backup file'))
             .catch((error) => console.error('Failed to backup data ...', error))
             .then(() => { console.log('Bye bye :\'('); process.exit(0); });

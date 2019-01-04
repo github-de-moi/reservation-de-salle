@@ -11,11 +11,20 @@ import { environment } from 'src/environments/environment';
 //import * as $ from "jquery";
 //import 'fullcalendar';
 
+// constantes
+const MIN_HOUR: string = '07:00';
+const MAX_HOUR: string = '19:00';
+
 // alias
 const $ = window['jQuery'];
 
-// constante --> /!\ bug si l'application reste chargée toute la nuit :-p
-const aujourd_hui = (new Date()).toISOString().substr(0, 10);
+// error TS2580: Cannot find name 'require'
+// const moment = require('moment');
+//declare var moment: (... args) => any;
+import * as moment from 'moment';
+
+// ajourd'hui
+const today = () => moment().startOf('day');
 
 /**
  * Sert à gérer le formulaire d'édition.
@@ -30,11 +39,13 @@ export class Formulaire {
   public debut: string;
   public fin: string;
 
+  public par_qui: string;
   public commentaire: string = null;
 
   // le formulaire est-il modifiable ?
   public readOnly: boolean = false;
 
+  // la dernière erreur survenur
   public error: string  = null;
 
   constructor(_id?: string) {
@@ -55,10 +66,7 @@ export class AppComponent implements AfterViewInit {
   
 	// https://codepen.io/chrisdpratt/pen/OOybam/
 
-  enCours: Formulaire = null;
-
-	// les réservations (cache local)
-	private reservations : Reservation[] = new Array();
+  formulaire: Formulaire = null;
 
   //
   // lifecycle
@@ -95,35 +103,45 @@ export class AppComponent implements AfterViewInit {
         center: 'title',
         right: 'month,agendaWeek' // agendaDay ?
       },
-      
-      //eventSources: [
-      //  {
-      //    url: environment.backendUrl,
-      //    color: 'yellow'    // an option!
-      //  }
-      //],
 
-      eventDataTransform: (event: Reservation): any => {
-        console.log('eventDataTransform', event);
-        return event;
+      // on n'affiche pas la ligne "Toute la journée"
+      // qui complique la gestion et n'est pas très
+      // visuelle au niveau affichage
+      allDaySlot: false,
+
+      // un affichage en crénaux de 15 minutes
+      // provoque un débordement vertical et
+      // l'apparition d'une scrollbar :-(
+      // on laisse donc 30 minutes et rien n'empêche
+      // de spécifier une durée inférieure à la création
+      // slotDuration: '00:15:00',
+      
+      // json feed
+      eventSources: [
+        {
+          url: environment.backendUrl
+        }
+      ],
+
+      // conversion réservation -> événement
+      eventDataTransform: (resa: Reservation): any => {        
+        return this.resaToEvent(resa);
       },
 
       // hook permettant d'ajuster le rendu d'un évènement
       // https://github.com/fullcalendar/fullcalendar/issues/3945
       eventRender: (event, element) => {
 
-        console.log('eventRender', event);
-
         // pas possible de modifier un évènement passé (géré dans le handler du click)
         // visuellement, il est grisé et n'a pas de croix de suppression
-        let resa = this.findResa(event.id);
-        if(resa.date < aujourd_hui) {
+        // (event peut être null lors d'un drag'n'drop survolant une zone invalide)
+        if(event.end == null || event.end.isBefore(today())) {
           return;
         }
 
         // seul l'owner peut supprimer une résa
         // donc pas de bras, pas de croix
-        if(this.currentUser != resa.par_qui) {
+        if(this.currentUser != event.metas.par_qui) {
           return;
         }
 
@@ -150,11 +168,11 @@ export class AppComponent implements AfterViewInit {
       weekends: false,
 
       // intervalle disponible
-      minTime: '07:00:00',
-      maxTime: '19:00:00',
+      minTime: MIN_HOUR,
+      maxTime: MAX_HOUR,
 
       // date du jour par défaut (sera ajustée au prochain jour ouvré si besoin)
-      defaultDate: aujourd_hui,
+      defaultDate: moment(),
 
       // can click day/week names to navigate views
       navLinks: true,
@@ -167,7 +185,7 @@ export class AppComponent implements AfterViewInit {
 
       // sélection d'évènement
       eventClick: (event, jsEvent, view) => { 
-        this.onEdit('' + event.id);
+        this.onEdit(event);
       },
 
       // allow "more" link when too many events
@@ -185,8 +203,8 @@ export class AppComponent implements AfterViewInit {
       validRange: function(nowDate) {
         return {
           // début du mois en cours
-          start: nowDate.format().substr(0, 8) + '01',
-          end: '2999-12-31'
+          start: nowDate.clone().startOf('month'),
+          end: nowDate.clone().add(6, 'months')
         };
       },
 
@@ -202,80 +220,55 @@ export class AppComponent implements AfterViewInit {
 
 		});
 
-    // chargement (asynchrone) des réservations
-    // déjà effectuées pour le mois en cours
-    this.resa.get().subscribe((data) => {
-      data.forEach(res => this.addResa(res));
-      // this.reservations = data; --> déjà fait par addResa() ^^
-    }, (error) => {
-      ///console.log('erreur de chargeemnt', error);
-      window.alert('erreur de chargeemnt :\'( ');
-    });
-
   }
 
   //
-  // gestion des dialogues
+  // crud
   //
 
-  onCreate(start, end): void {
+  private onCreate(start, end): void {
+
+    // start et end sont des "moments" toujours ordonnés (start < end)
+    // en vue "mois", l'heure n'est pas renseignée (logique ^^)
     
-    // start et end dépendent de la vue
-    // en visu semaine, on reçoit des dates (iso)
-    // exemple : 2018-12-03 / 2018-12-04
-    // et en visu jour, on reçoit date+heure
-    // exemple : 2018-12-21T06:00:00 / 2018-12-21T06:30:00
-    // dans tous les cas, les dates sont ordonnées :-)
-
-    const startDate = start.format();
-    const endDate = end.format();
-
-    console.log(startDate, endDate)
-
-    this.enCours = new Formulaire();
-    this.enCours.date = startDate.substr(0, 10);
-
     // si la date est antérieure à la date du jour, on ne fait rien ^^
-    if(this.enCours.date < aujourd_hui) {
+    if(start.isBefore(today())) {
       console.log('Pas possible de réserver pour une date passée');
       return;
     }
 
-    if(startDate.length > 0) {
-      this.enCours.debut = startDate.substr(11, 5);
-      this.enCours.fin = end.format().substr(11, 5);
-    }
-
-    // affichage du dialogue d'édition
-    // (on attend qu'il soit créé ds le dom)
-    setTimeout(() => {
-      ($('#dialog-create-or-edit') as any).modal('show');
-    }, 100);
+    // réutilisation de code ^^ 
+    this.onEdit({
+      start: start,
+      end: end,
+      metas: {
+        commentaire: null,
+        par_qui: this.currentUser
+      }
+    });
 
   }
 
-  onEdit(id: string) {
-    // recherche de la réservation en local
-    let resa = this.findResa(id);
-    if(resa == null) {
-      console.error('réservation ' + id + ' inexistante ?!?');
+  private onEdit(event: any) {
+
+    // pas possible de modifier un évènement passé
+    if(event.end.isBefore(today())) {
       return;
     }
-
-    if(resa.date < aujourd_hui) {
-      return;
-    }
-
+    
     // marshalling
-    this.enCours = new Formulaire();
-    this.enCours.commentaire = resa.commentaire;
-    this.enCours.debut = this.minutesToHour(resa.debut);
-    this.enCours.fin = this.minutesToHour(resa.fin);
-    this.enCours.date = resa.date;
-    this.enCours.id = resa.id;
+    this.formulaire = new Formulaire(event.id);
+    
+    this.formulaire.date = event.start.format('YYYY-MM-DD');
+    // si heure == 0, c'est une réservation pour toute la journée
+    this.formulaire.debut = (event.start.hour() > 0) ? event.start.format('HH:mm') : MIN_HOUR;
+    this.formulaire.fin = (event.end.hour() > 0) ? event.end.format('HH:mm') : MAX_HOUR;
+
+    this.formulaire.commentaire = event.metas.commentaire;
+    this.formulaire.par_qui = event.metas.par_qui;
 
     // seul l'owner peut supprimer une résa
-    this.enCours.readOnly = (this.currentUser != resa.par_qui);
+    this.formulaire.readOnly = (this.currentUser != event.metas.par_qui);
     
     // affichage du dialogue d'édition
     // (on attend qu'il soit créé ds le dom)
@@ -285,27 +278,43 @@ export class AppComponent implements AfterViewInit {
 
   }
 
-  onMove(event: any, revertFunc): void {
-    // la recherche ne devrait **jamais** renvoyer null ici inch'alla
-    const existing = this.findResa(event.id);
+  private onMove(event: any, revertFunc): void {
 
-    // récupération de la (nouvelle ?) date 
-    let nouvelleDate = event.start.format().substr(0, 10);
+    // les dates de début et fin de l'évènement sont déjà mises-à-jour
+    // pas de gestion du allDay ici ^^
+  
+    // TODO gérer le fait que end peut être un autre jour que start
+    let nouvelleDate = event.start.format('YYYY-MM-DD');
+
+    // limite l'heure de début/fin à laplage horaire valide
+    let min = event.start.clone().hour(parseInt(MIN_HOUR.substr(0, 2), 10)).minutes(parseInt(MIN_HOUR.substr(3, 2), 10));
+    event.start = moment.max(event.start, min);
+
+    // TODO utiliser event.end quand on gérera les réservations sur plusieurs journées 
+    let max = event.start.clone().hour(parseInt(MAX_HOUR.substr(0, 2), 10)).minutes(parseInt(MAX_HOUR.substr(3, 2), 10));
+    event.end = moment.min(event.end, max);
 
     // conversion en minutes des nouvelles heures de début et fin
-    let debutEnMinutes: number = this.hourToMinutes(event.start.format().substr(11, 5));
-    let finEnMinutes: number = this.hourToMinutes(event.end.format().substr(11, 5));
+    let debutEnMinutes: number = event.start.diff(event.start.clone().startOf('day'), 'minutes');
+    let finEnMinutes: number = event.end.diff(event.end.clone().startOf('day'), 'minutes');
 
-    // modification (TODO copy constructor)
-    let reservation = new Reservation(existing.id, nouvelleDate, debutEnMinutes, finEnMinutes, existing.par_qui);
-    reservation.commentaire = existing.commentaire;
+    // modification sur le backend
+    let reservation = new Reservation(event.id, nouvelleDate, debutEnMinutes, finEnMinutes, event.metas.par_qui);
+    reservation.commentaire = event.metas.commentaire;
 
     this.resa.update(reservation).subscribe((uid) => {
-      this.deleteResa(existing);
-      this.addResa(reservation);
-      this.enCours = null;
 
+      // TODO comment réutilsier du code de resaToEvent() ?
+      event.editable = !event.end.isBefore(today());
+      if(!event.editable) {
+        event.color = '#CCCCCC';
+      }      
+
+      // l'événement a déjà été bougé dans le calendrier ^^ mais 
+      // on force une actualisation pour refléter les modifications éventuelles
+      $('#calendar').fullCalendar('updateEvent', event);
       $('#calendar').fullCalendar('unselect');
+
     }, (error) => {
       console.error('erreur de sauvegarde', error);
       window.alert('erreur de sauvegarde');
@@ -315,87 +324,96 @@ export class AppComponent implements AfterViewInit {
 
   onSubmit(): void {
 
-    this.enCours.error = null;
+    this.formulaire.error = null;
 
     // vérification et normalisation des heures
-    let heureDebut = this.parseHourMinutes(this.enCours.debut);
-    let heureFin = this.parseHourMinutes(this.enCours.fin);
+    let heureDebut = this.parseHourMinutes(this.formulaire.debut);
+    let heureFin = this.parseHourMinutes(this.formulaire.fin);
 
-    if(this.enCours.error) {
+    if(this.formulaire.error) {
       return;
     }
 
     // conversion en minutes des heures de début et fin
     let debutEnMinutes: number = this.hourToMinutes(heureDebut);
-
-    // extraction de l'heure de fin
-    // et conversion en minutes
     let finEnMinutes: number = this.hourToMinutes(heureFin);
 
-console.log(this.enCours);
-
-    if(this.enCours.id) {
+    if(this.formulaire.id) {
       
-      // la recherche ne devrait **jamais** renvoyer null ici inch'alla
-      let existing = this.findResa(this.enCours.id);
-      let reservation = new Reservation(existing.id, existing.date, debutEnMinutes, finEnMinutes, existing.par_qui);
-      if(this.enCours.commentaire) {
-        reservation.commentaire = this.enCours.commentaire;
+      let reservation = new Reservation(this.formulaire.id, this.formulaire.date, debutEnMinutes, finEnMinutes, this.formulaire.par_qui);
+      if(this.formulaire.commentaire && this.formulaire.commentaire.length > 0) {
+        reservation.commentaire = this.formulaire.commentaire;
       }
 
-      this.resa.update(reservation).subscribe((uid) => {
-        $("#dialog-create-or-edit").modal('hide');
-        this.deleteResa(existing);
-        this.addResa(reservation);
-        this.enCours = null;
+      this.resa.update(reservation).subscribe((uid) => {        
+        let events: any[] = $('#calendar').fullCalendar('clientEvents', this.formulaire.id);
+        // on ne devrait avoir qu'un élément dans ce tableau
+        if(events && events.length == 1) {
+          // mise à jour du modèle (metas)
+          events.map(event => {
+            // TODO comment mutualiser le code avec celui de resaToEvent() ?
+            event.title = (reservation.commentaire ? reservation.commentaire + ' - ' : '') + reservation.par_qui,
+            event.metas.commentaire = this.formulaire.commentaire; 
+            // le owner ne peut pas changer ^^
+          });
+          // mise à jour graphique
+          $('#calendar').fullCalendar('updateEvent', events.shift());
+        }
 
+        // reset
+        $("#dialog-create-or-edit").modal('hide');
         $('#calendar').fullCalendar('unselect');
+        this.formulaire = null;
+
       }, (error) => {
         console.error('erreur de sauvegarde', error);
         window.alert('erreur de sauvegarde');
       });
       
     } else {
-      let reservation = new Reservation(null, this.enCours.date, debutEnMinutes, finEnMinutes, this.currentUser);
-      if(this.enCours.commentaire) {
-        reservation.commentaire = this.enCours.commentaire;
+
+      // création de la réservation
+      let reservation = new Reservation(null, this.formulaire.date, debutEnMinutes, finEnMinutes, this.currentUser);
+      if(this.formulaire.commentaire) {
+         reservation.commentaire = this.formulaire.commentaire;
       }
 
       this.resa.create(reservation).subscribe((uid) => {
-        $("#dialog-create-or-edit").modal('hide');
-        // l'id du bean est déjà mis-à-jour ^^         
-        this.addResa(reservation);
-        this.enCours = null;
+        // affichage
+        $('#calendar').fullCalendar('renderEvent', this.resaToEvent(reservation));
 
+        // reset
+        $("#dialog-create-or-edit").modal('hide');
         $('#calendar').fullCalendar('unselect');
-      }, (error) => {
-        console.error('erreur de sauvegarde', error);
-        window.alert('erreur de sauvegarde');
-      });
+        this.formulaire = null;
+
+       }, (error) => {
+         console.error('erreur de sauvegarde', error);
+         window.alert('erreur de sauvegarde');
+       });
 
     }
   }
 
   onCancel(): void {
-    this.enCours = null;
+    this.formulaire = null;
   }
 
   /**
    * Demande de suppression d'un évènement.
    * @memberof AppComponent
    */  
-  onDelete(id: string): void {
-    this.enCours = new Formulaire(id);
+  private onDelete(id: string): void {
+    this.formulaire = new Formulaire(id);
     setTimeout(() => {
       ($('#dialog-confirm-delete') as any).modal('show');
     }, 100);    
   }
 
-  onDeleteConfirmed(): void { 
-    let resa = this.findResa(this.enCours.id);
-    this.resa.delete(resa.id).subscribe(() => {
-      this.deleteResa(resa);
-      this.enCours = null;
+  onDeleteConfirmed(): void {    
+    this.resa.delete(this.formulaire.id).subscribe(() => {
+      $('#calendar').fullCalendar('removeEvents', this.formulaire.id);
+      this.formulaire = null;
     }, (error) => {
       console.error('erreur de suppression', error);
       window.alert('erreur de suppression :\'(');
@@ -433,44 +451,40 @@ console.log(this.enCours);
   }
 
   //
-  // crud
-  //
-
-  private addResa(res: Reservation): void {
-    this.reservations.push(res);
-    $('#calendar').fullCalendar('renderEvent', this.resaToEvent(res), /*stick?*/true); 
-  }
-
-  private findResa(id: string): Reservation {
-     // recherche de la réservation en local
-    let filtered = this.reservations.filter(r => r.id === id);
-    return (filtered.length == 1 ? filtered[0] : null);     
-  }
-
-  private deleteResa(r: Reservation): void {
-    let pos = this.reservations.indexOf(r);
-    if(pos != -1) {
-      $('#calendar').fullCalendar('removeEvents', r.id);
-      this.reservations.splice(pos, 1);
-    }
-  }
-
-  //
   // helpers d'helpers
   //
 
   private resaToEvent(res: Reservation): any {
+
     // la réservation est-elle périmée ?
-    let outdated = (res.date < aujourd_hui);
+    let outdated = moment(res.date).isBefore(today());
+
+    // on n'utilise pas la propriété allDay (i.e. journée entière)
+    // (le calendrier hebdomadaire n'affiche d'ailleurs plus la zone)
+    // parce qu'elle provoque l'affichage de l'évènement
+    // en tout petit en haut de la journée ... pas très visuel
 
     // https://fullcalendar.io/docs/event-object
+
     let event = {
       id: res.id,
+      
+      // début/fin
       start: res.date + 'T' + this.minutesToHour(res.debut),
       end: res.date + 'T' + this.minutesToHour(res.fin),
+
+      // apparence
       title: (res.commentaire ? res.commentaire + ' - ' : '') + res.par_qui,
+
       // la réservation n'est éditable que si elle est de moi et non passée
-      editable: (res.par_qui === this.currentUser && !outdated)
+      editable: (res.par_qui === this.currentUser && !outdated),
+
+      // données en plus qui seront
+      // conservées avec l'événement :)
+      metas: {
+        par_qui: res.par_qui,
+        commentaire: res.commentaire
+      }
     };
     
     if(outdated) {
@@ -483,6 +497,7 @@ console.log(this.enCours);
       // TODO la rendre personnalisable (pref)
       event['color'] = '#C8C8A9';
     }
+
     return event;
   }
 
@@ -494,7 +509,7 @@ console.log(this.enCours);
     
     let parts = (str || '').match(/([0-9]{1,2})[.:h]([0-9]{2})/);
     if(parts == null) {
-      this.enCours.error = "Heure incorrecte";
+      this.formulaire.error = "Heure incorrecte";
       return null;
     }
 

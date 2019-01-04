@@ -26,6 +26,7 @@ export class Reservation {
     public commentaire: string = null;
     // date au format iso, debut et fin en minutes
 	constructor(readonly id: string, readonly date: string, readonly debut: number, readonly fin: number, readonly par_qui: string) {
+        // nop
 	}
 }
 
@@ -38,29 +39,13 @@ export class ReservationService {
         // nop
     }
 
-	public get(y?: number, m?: number): Observable<Reservation[]> {
-
-        let params = new HttpParams();
-        if(y) params.set('y', '' + y);
-        if(m) params.set('m', '' + m);
-
-		return this.http.get<Reservation[]>(environment.backendUrl, {
-            params: params
-        }).pipe(
-            map(res => {
-                // conversion en "vrai" bean
-                res.map(bean => cast(bean, Reservation));
-                return res;
-            })
-        );
-
-	}
+    // pas de getter, on utilise un json feed pour alimenter le calendrier ^^
 
 	public create(r: Reservation): Observable<string> {
         // le service renvoie un tableau contenant les ids dans l'ordre d'arrivée
-		return this.http.post<string[]>(environment.backendUrl, r).pipe(
-            map(res => {
-                (r as any).id = res.shift();
+		return this.http.post<{id: string}>(environment.backendUrl, r).pipe(
+            map(result => {
+                (r as any).id = result.id;
                 return r.id;
             })
         );
