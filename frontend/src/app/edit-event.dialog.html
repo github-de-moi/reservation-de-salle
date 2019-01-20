@@ -1,0 +1,63 @@
+<div *ngIf="formulaire" class="modal fade" data-backdrop="static" id="dialog-create-or-edit" tabindex="-1" role="dialog" attr.aria-labelledby="dialog-create-or-edit-title" aria-hidden="true">
+    <div class="modal-dialog  modal-lg" role="document">
+      <div class="modal-content">
+      <form #form="ngForm" (ngSubmit)="onSubmit()">
+        <div class="modal-header">
+          <h5 class="modal-title" id="dialog-confirm-delete-title"> {{ formulaire.readOnly ? 'Consulter une réservation' : 'Editer une réservation' }} </h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          
+          <div class="row">
+              <div class="col form-group">
+                  <label for="start">Heure de début</label>
+                  <input [readonly]="formulaire.readOnly" type="text" name="start" class="form-control"
+                      id="start" placeholder="..." [(ngModel)]="formulaire.debut" required pattern="[0-9]{1,2}[.:h][0-9]{2}">
+                  <small id="startHelp" class="form-text text-muted">Format 24h : 15h00 ou 11:30 ou 9.15</small>
+              </div>
+              <div class="col form-group">
+                  <label for="end">Heure de fin</label>
+                  <input [readonly]="formulaire.readOnly" type="text" name="end" class="form-control"
+                      id="end" placeholder="..."[(ngModel)]="formulaire.fin" required pattern="[0-9]{1,2}[.:h][0-9]{2}">
+                  <small id="endHelp" class="form-text text-muted">Même format que pour l'heure de début :-)</small>
+              </div>
+          </div>
+          <div class="row">
+              <div class="col form-group">
+                  <label for="start">Commentaire (optionnel)</label>
+                  <input [readonly]="formulaire.readOnly" type="text" name="commentaire" class="form-control"
+                      id="commentaire" placeholder="" [(ngModel)]="formulaire.commentaire" maxlength="64">
+              </div>
+          </div>
+          <!-- en création, on porpose de créer une instance qui se répète -->
+          <ng-container *ngIf="formulaire.id == null">
+              <div class="form-check form-check-inline">
+                  <input [readonly]="formulaire.readOnly" type="checkbox" name="repeat" class="form-check-input"
+                      id="end" placeholder="..." [(ngModel)]="formulaire.repeat">
+                  <label for="repeat" class="form-check-label" class="50%">Répéter pendant n semaines</label>
+                  <input [disabled]="!formulaire.repeat" type="text" name="iterations" class="form-control"
+                      id="iterations" placeholder="..." [(ngModel)]="formulaire.iterations" pattern="[0-9]*">
+              </div>
+          </ng-container>
+          <!-- en modification, iterations ne sert à rien -->
+          <ng-container *ngIf="formulaire.id != null && formulaire.groupId" class="row">
+              <div class="form-check form-check-inline">
+                  <input [readonly]="formulaire.readOnly" type="checkbox" name="repeat" class="form-check-input"
+                      id="end" placeholder="..." [(ngModel)]="formulaire.repeat">
+                  <label for="repeat" class="form-check-label">Appliquer à toutes les répétitions à venir</label>
+              </div>
+          </ng-container>
+          <div *ngIf="formulaire.error" class="row">
+              <p class="col text-center" style="color: red;">{{ formulaire.error }}</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" (click)="onCancel()" class="btn btn-secondary" data-dismiss="modal">Annuler</button>
+          <button type="submit" [disabled]="formulaire.readOnly" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+      </div>
+    </div>
+  </div>

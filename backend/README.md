@@ -19,10 +19,10 @@ Les réservations sont identifiées de manière unique par un **uuid**, génér�
 
 ## Développement 
 
-Utiliser la commande `npm run dev` pour lancer le projet.
+Utiliser la commande `npm start` pour lancer le projet.
 
 ```
-$ npm run dev
+$ npm start
 ...
 Bound to tcp port 3000
 Here we go !
@@ -32,9 +32,21 @@ Here we go !
 
 ## Packaging
 
-To be done ^^
+La génération d'un bundle de prod se fait en deux temps :
+* compilation ts -> js (compilation en es6 compatible avec node)
+* création d'un bundle mono fichier
+
+$ tsc && ./node_modules/webpack/bin/webpack.js
+
+La commande a été aliasée dans `package.json` : `npm run build`.
+Le bundle définitif est disponible dans le fichier `./dist/bundle.js`.
+
+Pour lancer le projet, utiliser node ou forever ;-)
+```
+$ forever ./dist/bundle.js
+```
 
 ## TODO
 
 Reste à faire :
-- réorganiser le code, surtout la déclaration des endpoints (utiliser le router ?)
+- revoir la déclaration des endpoints (utiliser le router ?)

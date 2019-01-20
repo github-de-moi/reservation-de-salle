@@ -2,12 +2,10 @@
   "name": "reservation-de-salle",
   "version": "1.0.0",
   "description": "",
-  "main": "app.js",
+  "main": "server.js",
   "scripts": {
-    "build": "tsc",
-    "dev": "ts-node ./src/server.ts",
-    "start": "nodemon ./dist/server.js",
-    "prod": "npm run build && npm run start"
+    "start": "ts-node ./src/server.ts",
+    "build": "tsc && webpack"
   },
   "author": "Jay",
   "license": "WTFPL",
@@ -17,5 +15,11 @@
     "cors": "^2.8.5",
     "express": "^4.16.4",
     "uuid": "^3.3.2"
+  },
+  "devDependencies": {
+    "forever": "^0.15.3",
+    "webpack": "^4.28.4",
+    "webpack-cli": "^3.2.1",
+    "webpack-node-externals": "^1.7.2"
   }
 }

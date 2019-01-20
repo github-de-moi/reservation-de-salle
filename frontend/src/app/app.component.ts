@@ -1,58 +1,27 @@
 import { Component, AfterViewInit, ViewChild } from '@angular/core';
-import { ReservationService, Reservation } from './reservation.service';
 import { NgForm } from '@angular/forms';
-import { checkNoChangesNode } from '@angular/core/src/view/view';
-import { isArray } from 'util';
-import { environment } from 'src/environments/environment';
 
-// jquery et fullcalendar importés via angular.json
+import { environment } from 'src/environments/environment';
+import { ReservationService, Reservation, minutesToHour } from './reservation.service';
+import { Confirmation } from './confirm-delete.dialog';
+
+// jquery et fullcalendar sont importés via angular.json
+// import * as $ from "jquery";
+// import 'fullcalendar';
 // /!\ si importés deux fois, erreur chelou 
 // jquery__WEBPACK_IMPORTED_MODULE_2__(...).modal is not a function
-//import * as $ from "jquery";
-//import 'fullcalendar';
-
-// constantes
-const MIN_HOUR: string = '07:00';
-const MAX_HOUR: string = '19:00';
 
 // alias
 const $ = window['jQuery'];
 
 // error TS2580: Cannot find name 'require'
 // const moment = require('moment');
-//declare var moment: (... args) => any;
+// declare var moment: (... args) => any;
 import * as moment from 'moment';
+import { Edition } from './edit-event.dialog';
 
-// ajourd'hui
+// ajourd'hui (recalculé à chaque appel)
 const today = () => moment().startOf('day');
-
-/**
- * Sert à gérer le formulaire d'édition.
- * @export
- * @class Formulaire
- */
-export class Formulaire {
-
-  public id: string;
-
-  public date: string;
-  public debut: string;
-  public fin: string;
-
-  public par_qui: string;
-  public commentaire: string = null;
-
-  // le formulaire est-il modifiable ?
-  public readOnly: boolean = false;
-
-  // la dernière erreur survenur
-  public error: string  = null;
-
-  constructor(_id?: string) {
-    this.id = _id;
-  }
-
-}
 
 @Component({
 	selector: 'app-root',
@@ -61,18 +30,19 @@ export class Formulaire {
 })
 export class AppComponent implements AfterViewInit {
 
-  @ViewChild('dialog-create-or-edit')
-  form: NgForm;
+  // https://codepen.io/chrisdpratt/pen/OOybam/
+
+  // l'événement à créer/modifier (si non null)
+  eventToEdit: any = null;
+
+  // l'évènement à supprimer (si non null)
+  eventToDelete: any = null;
   
-	// https://codepen.io/chrisdpratt/pen/OOybam/
-
-  formulaire: Formulaire = null;
-
   //
   // lifecycle
   //
 
-  constructor(private resa: ReservationService) {
+  constructor(private service: ReservationService) {
     // nop
   }
 
@@ -80,14 +50,14 @@ export class AppComponent implements AfterViewInit {
 
     // identification de l'utilisateur
     // -> stocké en session (localStorage)
-    if(this.currentUser == null) {
+    if(this.service.currentUser == null) {
       let qui = window.prompt("Qui es-tu ?");
       if(qui == null) {
         // cancelled
         return;
       }
       if(qui.length > 1) {
-        localStorage.setItem('qui', qui);
+        this.service.currentUser = qui;
       }
       // refresh
       window.location.reload();
@@ -141,7 +111,7 @@ export class AppComponent implements AfterViewInit {
 
         // seul l'owner peut supprimer une résa
         // donc pas de bras, pas de croix
-        if(this.currentUser != event.metas.par_qui) {
+        if(this.service.currentUser != event.metas.par_qui) {
           return;
         }
 
@@ -168,8 +138,8 @@ export class AppComponent implements AfterViewInit {
       weekends: false,
 
       // intervalle disponible
-      minTime: MIN_HOUR,
-      maxTime: MAX_HOUR,
+      minTime: ReservationService.MIN_HOUR,
+      maxTime: ReservationService.MAX_HOUR,
 
       // date du jour par défaut (sera ajustée au prochain jour ouvré si besoin)
       defaultDate: moment(),
@@ -223,7 +193,7 @@ export class AppComponent implements AfterViewInit {
   }
 
   //
-  // crud
+  // actions
   //
 
   private onCreate(start, end): void {
@@ -242,8 +212,8 @@ export class AppComponent implements AfterViewInit {
       start: start,
       end: end,
       metas: {
-        commentaire: null,
-        par_qui: this.currentUser
+        par_qui: this.service.currentUser,
+        commentaire: null
       }
     });
 
@@ -255,27 +225,8 @@ export class AppComponent implements AfterViewInit {
     if(event.end.isBefore(today())) {
       return;
     }
-    
-    // marshalling
-    this.formulaire = new Formulaire(event.id);
-    
-    this.formulaire.date = event.start.format('YYYY-MM-DD');
-    // si heure == 0, c'est une réservation pour toute la journée
-    this.formulaire.debut = (event.start.hour() > 0) ? event.start.format('HH:mm') : MIN_HOUR;
-    this.formulaire.fin = (event.end.hour() > 0) ? event.end.format('HH:mm') : MAX_HOUR;
-
-    this.formulaire.commentaire = event.metas.commentaire;
-    this.formulaire.par_qui = event.metas.par_qui;
-
-    // seul l'owner peut supprimer une résa
-    this.formulaire.readOnly = (this.currentUser != event.metas.par_qui);
-    
-    // affichage du dialogue d'édition
-    // (on attend qu'il soit créé ds le dom)
-    setTimeout(() => {
-      ($('#dialog-create-or-edit') as any).modal('show');
-    }, 100);
-
+    // on délègue le travail ^^
+    this.eventToEdit = event;
   }
 
   private onMove(event: any, revertFunc): void {
@@ -287,11 +238,11 @@ export class AppComponent implements AfterViewInit {
     let nouvelleDate = event.start.format('YYYY-MM-DD');
 
     // limite l'heure de début/fin à laplage horaire valide
-    let min = event.start.clone().hour(parseInt(MIN_HOUR.substr(0, 2), 10)).minutes(parseInt(MIN_HOUR.substr(3, 2), 10));
+    let min = event.start.clone().hour(parseInt(ReservationService.MIN_HOUR.substr(0, 2), 10)).minutes(parseInt(ReservationService.MIN_HOUR.substr(3, 2), 10));
     event.start = moment.max(event.start, min);
 
     // TODO utiliser event.end quand on gérera les réservations sur plusieurs journées 
-    let max = event.start.clone().hour(parseInt(MAX_HOUR.substr(0, 2), 10)).minutes(parseInt(MAX_HOUR.substr(3, 2), 10));
+    let max = event.start.clone().hour(parseInt(ReservationService.MAX_HOUR.substr(0, 2), 10)).minutes(parseInt(ReservationService.MAX_HOUR.substr(3, 2), 10));
     event.end = moment.min(event.end, max);
 
     // conversion en minutes des nouvelles heures de début et fin
@@ -302,9 +253,14 @@ export class AppComponent implements AfterViewInit {
     let reservation = new Reservation(event.id, nouvelleDate, debutEnMinutes, finEnMinutes, event.metas.par_qui);
     reservation.commentaire = event.metas.commentaire;
 
-    this.resa.update(reservation).subscribe((uid) => {
+    // devrait-on gérer les répétitions ici ? à priori non
+    // pour modifier toutes les instances, il faut passer
+    // par la boîte de dialogue de modification
+    // donc reservation.groupId = undefined;
 
-      // TODO comment réutilsier du code de resaToEvent() ?
+    this.service.update(reservation).subscribe((uid) => {
+
+      // TODO comment réutiliser du code de resaToEvent() ?
       event.editable = !event.end.isBefore(today());
       if(!event.editable) {
         event.color = '#CCCCCC';
@@ -322,136 +278,111 @@ export class AppComponent implements AfterViewInit {
     });
   }
 
-  onSubmit(): void {
+  /**
+   * Demande de suppression d'un évènement.
+   * @param id L'identifiant de l'événement.
+   * @memberof AppComponent
+   */  
+  onDelete(id: string): void {
+    // recherche de l'évènement dans le cache local (géré par le calendar)
+    let events: any[] = $('#calendar').fullCalendar('clientEvents', id);
+    if(events.length == 1) {
+      this.eventToDelete = events.shift();
+    }
+  }
 
-    this.formulaire.error = null;
+  //
+  // feedback des boîtes de dialogue
+  //
 
-    // vérification et normalisation des heures
-    let heureDebut = this.parseHourMinutes(this.formulaire.debut);
-    let heureFin = this.parseHourMinutes(this.formulaire.fin);
-
-    if(this.formulaire.error) {
+  onEditFeedback(edition: Edition): void {
+    
+    // annulé ?
+    if(edition == null) { 
+      this.eventToEdit = null;
       return;
     }
 
-    // conversion en minutes des heures de début et fin
-    let debutEnMinutes: number = this.hourToMinutes(heureDebut);
-    let finEnMinutes: number = this.hourToMinutes(heureFin);
-
-    if(this.formulaire.id) {
-      
-      let reservation = new Reservation(this.formulaire.id, this.formulaire.date, debutEnMinutes, finEnMinutes, this.formulaire.par_qui);
-      if(this.formulaire.commentaire && this.formulaire.commentaire.length > 0) {
-        reservation.commentaire = this.formulaire.commentaire;
-      }
-
-      this.resa.update(reservation).subscribe((uid) => {        
-        let events: any[] = $('#calendar').fullCalendar('clientEvents', this.formulaire.id);
+    if(edition.created) {
+      // gestion des répétitions
+      if(edition.resa.groupId != null) {
+        // on charge tout le groupe, tant pis pour le gâchis
+        // (les entrées en dehors de l'intervalle actif ne seront pas affichées)
+        this.service.ofGroup(edition.resa.groupId).subscribe((reservations) => {
+          reservations.forEach(reservation => {
+            $('#calendar').fullCalendar('renderEvent', this.resaToEvent(reservation));
+          });
+        });
+      } else {
+        // ajoute l'événement dans le calendrier
+        $('#calendar').fullCalendar('renderEvent', this.resaToEvent(edition.resa));
+      }    
+    } else {
+      // gestion des répétitions
+      if(edition.resa.groupId != null) {
+        // on va faire simple : on met tout à jour
+        $('#calendar').fullCalendar('refetchEvents');
+      } else {
+        // récupération de l'événement originel
+        let events: any[] = $('#calendar').fullCalendar('clientEvents', edition.resa.id);
         // on ne devrait avoir qu'un élément dans ce tableau
         if(events && events.length == 1) {
           // mise à jour du modèle (metas)
           events.map(event => {
             // TODO comment mutualiser le code avec celui de resaToEvent() ?
-            event.title = (reservation.commentaire ? reservation.commentaire + ' - ' : '') + reservation.par_qui,
-            event.metas.commentaire = this.formulaire.commentaire; 
+            event.title = (edition.resa.commentaire ? edition.resa.commentaire + ' - ' : '') + edition.resa.par_qui,
+            event.metas.commentaire = edition.resa.commentaire; 
             // le owner ne peut pas changer ^^
           });
-          // mise à jour graphique
           $('#calendar').fullCalendar('updateEvent', events.shift());
         }
-
-        // reset
-        $("#dialog-create-or-edit").modal('hide');
-        $('#calendar').fullCalendar('unselect');
-        this.formulaire = null;
-
-      }, (error) => {
-        console.error('erreur de sauvegarde', error);
-        window.alert('erreur de sauvegarde');
-      });
-      
-    } else {
-
-      // création de la réservation
-      let reservation = new Reservation(null, this.formulaire.date, debutEnMinutes, finEnMinutes, this.currentUser);
-      if(this.formulaire.commentaire) {
-         reservation.commentaire = this.formulaire.commentaire;
       }
+    }
 
-      this.resa.create(reservation).subscribe((uid) => {
-        // affichage
-        $('#calendar').fullCalendar('renderEvent', this.resaToEvent(reservation));
+    $('#calendar').fullCalendar('unselect');
 
-        // reset
-        $("#dialog-create-or-edit").modal('hide');
-        $('#calendar').fullCalendar('unselect');
-        this.formulaire = null;
+  }
 
-       }, (error) => {
-         console.error('erreur de sauvegarde', error);
-         window.alert('erreur de sauvegarde');
-       });
+  /**
+   * La suppression a été confirmée ou pas.
+   * @param confirmed Les infos sur l'évènement
+   *  à supprimer, null si abandon.
+   */
+  onDeleteFeedback(confirmation: Confirmation): void {
+    
+    // annulé ?
+    if(confirmation == null) { 
+      this.eventToDelete = null;
+      return;
+    }
 
+    // la suppression est confirmée et effective
+    // (les données sont à jour sur le backend)
+
+    if(confirmation.all) {
+      // suppression d'un groupe
+      let toBeRemoved: string[] = [];
+      // recherche dans les événements en local de
+      // tous les éléments faisant partie du groupe
+      // et mémorise leur id dans une liste
+      $('#calendar').fullCalendar('clientEvents').forEach(element => {
+          if(element.metas.group_id === confirmation.event.metas.group_id) {
+              toBeRemoved.push(element.id);
+          }
+      });
+      // suppression un par un
+      toBeRemoved.forEach(element => {
+          $('#calendar').fullCalendar('removeEvents', element);
+      });
+
+    } else {
+        // suppression unitaire
+        $('#calendar').fullCalendar('removeEvents', confirmation.event.id);
     }
   }
 
-  onCancel(): void {
-    this.formulaire = null;
-  }
-
-  /**
-   * Demande de suppression d'un évènement.
-   * @memberof AppComponent
-   */  
-  private onDelete(id: string): void {
-    this.formulaire = new Formulaire(id);
-    setTimeout(() => {
-      ($('#dialog-confirm-delete') as any).modal('show');
-    }, 100);    
-  }
-
-  onDeleteConfirmed(): void {    
-    this.resa.delete(this.formulaire.id).subscribe(() => {
-      $('#calendar').fullCalendar('removeEvents', this.formulaire.id);
-      this.formulaire = null;
-    }, (error) => {
-      console.error('erreur de suppression', error);
-      window.alert('erreur de suppression :\'(');
-    });
-  }
-
   //
-  // helpers
-  //
-
-  /**
-   * L'utilisateur "connecté".
-   * @memberof AppComponent
-   */
-  private get currentUser(): string {
-    return localStorage.getItem('qui');
-  }
-
-  /**
-   * Convertit un nombre de minutes en heure "hh:mm".
-   * @param {number} m Un nombre de minutes.
-   * @returns L'heure correspondante ou null si input invalide.
-   * @memberof AppComponent
-   */
-  private minutesToHour(m: number): string {
-    if(m >= 1440) {
-      return null;
-    }
-    return ('' + Math.floor(m/60)).padStart(2, '0') + ":" + ('' + Math.floor(m%60)).padStart(2, '0');
-  }
-
-  private hourToMinutes(s: string): number {
-    // TODO vérifier que l'input est sous la forme hh:mm ou pas loin ;-)
-    return parseInt(s.substr(0, 2)) * 60 + parseInt(s.substr(3, 2));
-  }
-
-  //
-  // helpers d'helpers
+  // helpers graphiques
   //
 
   private resaToEvent(res: Reservation): any {
@@ -470,27 +401,28 @@ export class AppComponent implements AfterViewInit {
       id: res.id,
       
       // début/fin
-      start: res.date + 'T' + this.minutesToHour(res.debut),
-      end: res.date + 'T' + this.minutesToHour(res.fin),
+      start: res.date + 'T' + minutesToHour(res.debut),
+      end: res.date + 'T' + minutesToHour(res.fin),
 
       // apparence
       title: (res.commentaire ? res.commentaire + ' - ' : '') + res.par_qui,
 
       // la réservation n'est éditable que si elle est de moi et non passée
-      editable: (res.par_qui === this.currentUser && !outdated),
+      editable: (res.par_qui === this.service.currentUser && !outdated),
 
       // données en plus qui seront
       // conservées avec l'événement :)
       metas: {
         par_qui: res.par_qui,
-        commentaire: res.commentaire
+        commentaire: res.commentaire,
+        group_id: res.groupId
       }
     };
     
     if(outdated) {
       // disabled
       event['color'] = '#CCCCCC';
-    } else if(res.par_qui === this.currentUser) {
+    } else if(res.par_qui === this.service.currentUser) {
       // mes réservations à moi sont 
       // dans une couleur différente
       // pour sauter aux yeux :)
@@ -499,32 +431,6 @@ export class AppComponent implements AfterViewInit {
     }
 
     return event;
-  }
-
-  /**
-   * Vérifie et normalise une heure au format "hh'.'mm" ou "hh':'mm" ou "nn'h'mm".
-   * @param str 
-   */
-  private parseHourMinutes(str: string): string {
-    
-    let parts = (str || '').match(/([0-9]{1,2})[.:h]([0-9]{2})/);
-    if(parts == null) {
-      this.formulaire.error = "Heure incorrecte";
-      return null;
-    }
-
-    let hours = parseInt(parts[1] || '');
-    if(isNaN(hours) || hours < 0 || hours > 23) {
-      throw 'heure invalide (' + parts[1] + ')';
-    }
-
-    let minutes = parseInt(parts[2] || '');
-    if(minutes < 0 || minutes > 59) {
-      throw 'minutes invalide (' + parts[2] + ')';
-    }
-
-    return ('' + hours).padStart(2, '0') + ':' + ('' + minutes).padStart(2, '0');
-
   }
 
 }

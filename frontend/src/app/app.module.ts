@@ -4,10 +4,14 @@ import { HttpClientModule } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 
 import { AppComponent } from './app.component';
+import { ConfirmDeleteDialog } from './confirm-delete.dialog';
+import { EditEventDialog } from './edit-event.dialog';
 
 @NgModule({
   declarations: [
-    AppComponent
+    AppComponent,
+    ConfirmDeleteDialog,
+    EditEventDialog
   ],
   imports: [
     BrowserModule,
@@ -15,6 +19,6 @@ import { AppComponent } from './app.component';
     FormsModule
   ],
   providers: [],
-  bootstrap: [AppComponent]
+  bootstrap: [ AppComponent ]
 })
 export class AppModule { }

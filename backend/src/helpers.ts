@@ -15,3 +15,12 @@ export function isUuid(s: string): boolean {
 export function isIsoDate(s: string): boolean {
 	return /^20[0-9]{2}-(0[1-9]|1[0-2])-[0-9]{2}$/.test(s);
 }
+
+export function isoToDate(str: string): Date {
+	return new Date(parseInt(str.substr(0, 4)), parseInt(str.substr(5, 2)) - 1, parseInt(str.substr(8, 2)));
+}
+
+export function dateToIso(d: Date): string {
+	return d.getFullYear() + '-' + ('' + (d.getMonth() + 1)).padStart(2, '0') + '-' + ('' + d.getDate()).padStart(2, '0');
+}
+

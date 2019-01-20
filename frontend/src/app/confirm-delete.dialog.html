@@ -1,0 +1,21 @@
+<div *ngIf="formulaire" class="modal fade" data-backdrop="static" id="dialog-confirm-delete" tabindex="-1" role="dialog" attr.aria-labelledby="dialog-confirm-delete-title" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="dialog-confirm-delete-title"> Confirmer la suppression </h5>
+            </div>
+            <div class="modal-body">
+                <p>Etes-vous sûr de vouloir supprimer cette réservation ?</p>
+                <div *ngIf="formulaire.groupId" class="form-check form-check-inline">
+                    <input [readonly]="formulaire.readOnly" type="checkbox" name="all" class="form-check-input"
+                        id="end" placeholder="..." [(ngModel)]="formulaire.all">
+                    <label for="all" class="form-check-label">Appliquer à toutes les répétitions</label>
+                </div>                
+            </div>
+            <div class="modal-footer">
+                <button (click)="onCancel();" type="button" class="btn btn-secondary" data-dismiss="modal">Non</button>
+                <button (click)="onConfirm();" type="button" class="btn btn-warning" >Oui</button>
+            </div>
+        </div>
+    </div>
+</div>

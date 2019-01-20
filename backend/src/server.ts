@@ -4,10 +4,9 @@ import * as bodyParser from "body-parser";
 
 import { Reservation, Reservations, Preferences } from "./storage";
 import { isUuid, isIsoDate } from "./helpers";
-import { isObject } from "util";
+import { isObject, isNumber } from "util";
 
 // imports
-const uuidv4 = require('uuid/v4');
 const cors = require('cors');
 const app = express();
 
@@ -43,10 +42,31 @@ app.options('*', cors());
 
 // convertit un objet vanilla {} en bean
 const unmarshaller = (json): Reservation => {
-    // TODO jeter une exception si données invalides
-    let result = new Reservation(isUuid(json.id) ? json.id : uuidv4(), json.date, json.debut, json.fin, json.par_qui);
-    // le commentaire est optionnel
-    result.commentaire = json.commentaire;
+
+    // TODO jeter une "exception" spéciale (genre IllegalArgument)
+    // pour générer une erreur http 400 - bad argument
+
+    // la date doit être au format iso (yyyy-mm-dd)
+    if(!/^20[0-9]{2}\-[0-1][0-9]\-[0-3][0-9]$/.test(json.date)) {
+        throw "Date incorrecte (aaaa-mm-jj attendu)"
+    }
+
+    // l'heure de début et de fin sont en minutes depuis minuit (valeur maxi 1439)
+    if(!isNumber(json.debut) || json.debut < 0 || json.debut >= 1440) {
+        throw "Heure de début incorrecte (moins de 1440 minutes)"
+    }
+    if(!isNumber(json.fin) || json.fin < 0 || json.fin >= 1440) {
+        throw "Heure de fin incorrecte (moins de 1440 minutes)"
+    }
+
+    let result = new Reservation(isUuid(json.id) ? json.id : undefined, json.date, json.debut, json.fin, json.par_qui);
+    
+    // commentaire (optionnel)
+    result.commentaire = json.commentaire || null;
+    
+    // gestion des répétitions (optionnel)
+    result.groupId = isUuid(json.groupId) ? json.groupId : null;
+
     return result;
 };
 
@@ -56,6 +76,9 @@ const unmarshaller = (json): Reservation => {
 // |_|  \___/`___| |_| \___./__/
 // 
 
+// récupération des réservations
+// paramètres optionnels :
+// m pour le mois et y pour l'année
 app.get('/', function (req, res) {
     
     // compatibilité avec le json feed ^^
@@ -76,6 +99,19 @@ app.get('/', function (req, res) {
     res.send( reservations.find(req.query.start, req.query.end) );
 });
 
+app.get('/groups/:id', function (req, res) {
+    if(!isUuid(req.params.id)) {
+        res.status(400);
+        res.send({error: "identifiant du groupe absent"});
+        return;
+    }
+    res.send( reservations.all(req.params.id) );
+});
+
+// créé une nouvelle réservation
+// renvoie l'id de l'instance créée
+// et l'id de répétition si répétition
+// (i.e. l'url contient ?repeat=nn) 
 app.post('/', function (req, res) {
 
     // req.body contient le json uploadé
@@ -85,15 +121,29 @@ app.post('/', function (req, res) {
         return;
     }
 
-    let result = reservations.create(unmarshaller(req.body));
-    res.send({id: result.id});
+    // gestion des répétitions
+    let reservation = reservations.create(unmarshaller(req.body));
+    let result: any = {id: reservation.id};
+
+    // le nombre de répétitions est passé en query string
+    // on limite à 19 répétitions maxi, soit 20 instances en tout
+    if(req.query.repeat && /^1?[0-9]/.test(req.query.repeat)) {
+        let numRepeat = parseInt(req.query.repeat);
+        for(let k=0; k<numRepeat; k++) {
+            reservation = reservations.create(reservation.repeat());
+        }
+        // c'est le même sur toutes les instance ^^
+        result.groupId = reservation.groupId;
+    }
+    res.send(result);
+
 });
 
 app.put('/:id', function (req, res) {
     // req.body contient le json uploadé
     if(isObject(req.body)) {
-        // convertit un objet vanilla {} en bean
-        // et le persiste "en base"
+        // met à jour une instance ou tout le groupe
+        // en fonction de la présence ou non de l'id de groupe
         reservations.update( unmarshaller(req.body) );
     } else {
         res.status(400);
@@ -105,6 +155,11 @@ app.put('/:id', function (req, res) {
 
 app.delete('/:id', function (req, res) {
     reservations.remove(req.params.id);
+    res.send({});
+});
+
+app.delete('/groups/:id', function (req, res) {
+    reservations.removeGroup(req.params.id);
     res.send({});
 });
 
@@ -142,6 +197,16 @@ app.put('/prefs/:username', function (req, res) {
 // |_|  `___||_|_| |___/<___||___/`_. | |_|  `___||_|_|
 //                                <___'                
 
+// traitement des erreurs 
+app.use(function(err, req, res, next) {
+    console.error(err, err.stack);
+    if (res.headersSent) {
+        return next(err);
+    }
+    res.status(500);
+    res.json({ error: err });
+});
+  
 // https://stackoverflow.com/a/35999141
 // TODO comment utiliser Promise.finally ?
 reservations.import().then((num) => {
