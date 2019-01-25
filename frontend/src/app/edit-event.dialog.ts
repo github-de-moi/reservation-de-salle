@@ -126,7 +126,7 @@ export class EditEventDialog {
     
         // reset
         this.formulaire.error = null;
-    
+       
         try {
           
           // vérification et normalisation des heures
@@ -141,13 +141,13 @@ export class EditEventDialog {
           this.formulaire.error = str;
           return;
         }
-        
+
         // conversion en minutes des heures de début et fin
         let debutEnMinutes: number = hourToMinutes(heureDebut);
         let finEnMinutes: number = hourToMinutes(heureFin);
     
         if(this.formulaire.id) {
-          
+
             let reservation = new Reservation(this.formulaire.id, this.formulaire.date, debutEnMinutes, finEnMinutes, this.formulaire.par_qui);
             if(this.formulaire.commentaire && this.formulaire.commentaire.length > 0) {
                 reservation.commentaire = this.formulaire.commentaire;
@@ -158,6 +158,7 @@ export class EditEventDialog {
             }
     
             this.service.update(reservation).subscribe((uid) => {
+                
                 this.feedback.emit(new Edition(reservation, false));
                 // masquage du formulaire et reset
                 $("#dialog-create-or-edit").modal('hide');

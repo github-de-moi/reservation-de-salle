@@ -328,13 +328,14 @@ export class AppComponent implements AfterViewInit {
         // on ne devrait avoir qu'un élément dans ce tableau
         if(events && events.length == 1) {
           // mise à jour du modèle (metas)
-          events.map(event => {
-            // TODO comment mutualiser le code avec celui de resaToEvent() ?
-            event.title = (edition.resa.commentaire ? edition.resa.commentaire + ' - ' : '') + edition.resa.par_qui,
-            event.metas.commentaire = edition.resa.commentaire; 
-            // le owner ne peut pas changer ^^
-          });
-          $('#calendar').fullCalendar('updateEvent', events.shift());
+          let event = events.shift();
+          // TODO comment mutualiser le code avec celui de resaToEvent() et onMove() ?
+          event.start = moment(edition.resa.date + 'T' + minutesToHour(edition.resa.debut));
+          event.end = moment(edition.resa.date + 'T' + minutesToHour(edition.resa.fin));
+          event.title = (edition.resa.commentaire ? edition.resa.commentaire + ' - ' : '') + edition.resa.par_qui,
+          event.metas.commentaire = edition.resa.commentaire; 
+          // pour le moment, le owner ne peut pas changer ^^
+          $('#calendar').fullCalendar('updateEvent', event);
         }
       }
     }
