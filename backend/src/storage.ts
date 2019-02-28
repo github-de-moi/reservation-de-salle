@@ -209,7 +209,7 @@ export class Reservations {
 
 		let toBeRemoved: string[] = [];
 		// premier passage pour énumérer les clés à supprimer
-		Object.keys(this.storage).forEach(function(key, index) {
+		Object.keys(this.storage).forEach((key, index) => {
 			let resa = this.storage[key];
 			if(resa.date < threshold) {
 				toBeRemoved.push(key);
